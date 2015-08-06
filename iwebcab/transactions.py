@@ -13,17 +13,13 @@ class BaseAPITransaction(object):
 
     @property
     def endpoint(self):
-        return "{command}.json".format(command=self.command)
+        return "https://cp.iwebcab.com/public_api/{command}.json".format(command=self.command)
 
     def __init__(self, command, **kwargs):
         self.command = command
-        self.requires = kwargs.get('requires')
+        self.requires = kwargs.get('requires', [])
         # iWebCab uses posts by default
         self.method = kwargs.get('method', 'POST')
-
-        if not isinstance(self.requires, list):
-            raise ValueError("API Transaction requires kwarg must be a list of required parameter "
-                             "keys")
 
     def __call__(self, *args, **kwargs):
         """
@@ -31,8 +27,15 @@ class BaseAPITransaction(object):
         Tests that the call was constructed correctly with all required parameters.
         """
 
+        # Attach the API Key to the parameters which was bound to this class from the iWebCab
+        # client class.
+        kwargs.update({
+            'api_key': self.api_key
+        })
+
         param_keys = kwargs.keys()
         missing_params = []
+
         for k in self._get_required_parameters():
             if k not in param_keys:
                 missing_params.append(k)
@@ -49,23 +52,17 @@ class BaseAPITransaction(object):
         Do the actual HTTP request for the API call.
         """
 
-        # Attach the API Key to the parameters which was boind to this class from the iWebCab
-        # client class.
-        parameters.update({
-            'api_key': self.api_key
-        })
-
         # Make the call
         if self.method == 'GET':
             response = requests.get(self.endpoint, params=parameters)
         elif self.method == 'POST':
-            response = requests.post(self.endpoint, parms=parameters)
+            response = requests.post(self.endpoint, params=parameters)
         else:
             raise ValueError("API endpoint {name} was called with an unsupported HTTP method "
                              "{method}".format(name=self.endpoint, method=self.method))
 
         # Convert the response to a Python object and check for errors
-        response_object = json.loads(response.text())
+        response_object = json.loads(response.text)
         if 'error' in response_object.keys():
             raise iWebCabError(response_object['error'])
 
